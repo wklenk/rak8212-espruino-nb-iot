@@ -3,19 +3,6 @@
 Quectel BG96 Narrowband IoT (NB1) functions.
 */
 
-var C = {
-  MY: 0x001,          // description
-  PRIVATE: 0x001,     // description
-  CONSTANTS: 0x00423  // description
-};
-
-/** 'public' constants here */
-BG96NB1.prototype.C = {
-  MY: 0x013,         // description
-  PUBLIC: 0x0541,    // description
-  CONSTANTS: 0x023   // description
-};
-
 function string2hex(data) {
   var arr = [];
   for (var n = 0, l = data.length; n < l; n++) {
