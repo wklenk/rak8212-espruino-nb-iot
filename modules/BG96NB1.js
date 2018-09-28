@@ -89,19 +89,7 @@ BG96NB1Client.prototype.write = function (data) {
               line = line.split(",");
               var bytesToRead = line[2];
 
-              // Workaround for issue
-              // https://github.com/espruino/Espruino/issues/1512
-              bytesToRead++; // The first character is garbage \n, always read one more
-
-              bg96nb1.at.getData(bytesToRead, function processData(data) {
-
-                // Workaround for issue
-                // https://github.com/espruino/Espruino/issues/1512
-                if ('\n' !== data[0]) {
-                  console.warn("BG96NB1: Remove workaround for https://github.com/espruino/Espruino/issues/1512");
-                }
-                data = data.substr(1);
-
+              bg96nb1.at.getData(line[2], function processData(data) {
                 console.log("BG96NB1Client ] " + JSON.stringify(data));
                 client.clientWriteBusy = false; // FIXME: What about timeout?
                 client.emit("data", data);
