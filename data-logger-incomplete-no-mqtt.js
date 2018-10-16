@@ -46,5 +46,5 @@ setupExternalHardware();
 // This is called when the device boots up (or by calling "load();")
 // Wiring to external hardware has to be set up.
 function onInit() {
-  setupExternalHardware();
+  //setupExternalHardware();
 }

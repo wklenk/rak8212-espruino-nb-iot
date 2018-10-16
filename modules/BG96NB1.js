@@ -18,11 +18,12 @@ function string2hex(data) {
 
 function BG96NB1Client(bg96nb1) {
   this.bg96nb1 = bg96nb1;
+  this.debug = bg96nb1.options.debug;
   this.clientWriteBusy = false;
   this.clientWriteQueue = [];
   this.clientWriteQueueTimer = null;
 
-  console.log("BG96NB1Client created");
+  if (this.debug) console.log("BG96NB1Client created");
 }
 
 BG96NB1Client.prototype.write = function (data) {
@@ -30,7 +31,7 @@ BG96NB1Client.prototype.write = function (data) {
   var client = this;
   if (client.clientWriteBusy) {
 
-    console.log("BG96NB1Client queued " + JSON.stringify(data));
+    if (client.debug) console.log("BG96NB1Client queued " + JSON.stringify(data));
     client.clientWriteQueue.push(data);
 
     if (null === client.clientWriteQueueTimer) {
@@ -46,7 +47,7 @@ BG96NB1Client.prototype.write = function (data) {
           return; // Queue is empty
         }
 
-        console.log("BG96NB1Client unqueued " + JSON.stringify(data));
+        if (client.debug) console.log("BG96NB1Client unqueued " + JSON.stringify(data));
 
         client.write(data);
 
@@ -60,40 +61,23 @@ BG96NB1Client.prototype.write = function (data) {
 
   client.clientWriteBusy = true;
 
-  console.log("BG96NB1Client [" + JSON.stringify(data));
+  if (client.debug) console.log("BG96NB1Client [" + JSON.stringify(data));
 
   var hex = string2hex(data);
   return bg96nb1.sendAtCommand('AT+QISENDEX=0,"' + hex + '"', 180000)
-    .then(function () {
-      // Don't wait for a response for publishing a topic
-      if (0x30 !== data.charCodeAt(0)) { // FIXME: This is very specific to MQTT
-        return new Promise(
-          function () {
-            var registerLine = '+QIURC: "recv"';
-            bg96nb1.at.registerLine(registerLine, function onUrc(line) { // FIXME: Better to register before sending command?
-              bg96nb1.at.unregisterLine(registerLine);
-
-              line = line.split(",");
-              var bytesToRead = line[2];
-
-              bg96nb1.at.getData(line[2], function processData(data) {
-                console.log("BG96NB1Client ] " + JSON.stringify(data));
-                client.clientWriteBusy = false; // FIXME: What about timeout?
-                client.emit("data", data);
-              })
-            })
-          }
-        )
-      } else {
-        client.clientWriteBusy = false;
-      }
+    .then(function resolve() {
+      client.clientWriteBusy = false;
+    },
+    function reject(err) {
+      if (client.debug) console.log("BG96NB1Client Error sending data.");
+      client.clientWriteBusy = false;
     })
 };
 
 BG96NB1Client.prototype.end = function () {
 
   var client = this;
-  console.log("BG96NB1Client closing connection.");
+  if (client.debug) console.log("BG96NB1Client closing connection.");
 
   if (null !== client.clientWriteQueueTimer) {
     clearTimeout(client.clientWriteQueueTimer);
@@ -107,12 +91,14 @@ BG96NB1Client.prototype.end = function () {
 };
 
 function BG96NB1(uart, options) {
+  var bg96nb1 = this;
 
-  this.options = options;
+  bg96nb1.options = options;
 
   uart.removeAllListeners();
-  this.at = require('AT').connect(uart);
-  this.at.debug(options.debug);
+  bg96nb1.at = require('AT').connect(uart);
+  bg96nb1.at.debug(options.debug);
+  bg96nb1.client = null;
 }
 
 BG96NB1.prototype.sendAtCommand = function (command, timeoutMs) {
@@ -152,7 +138,7 @@ BG96NB1.prototype.powerDown = function (callback) {
 };
 
 BG96NB1.prototype.getNetworkRegistrationStatus = function (callback) {
-  sendAtCommand('AT+CREG?')
+  this.sendAtCommand('AT+CREG?')
     .then(function resolve(v) {
       callback(v);
     }, function reject(reason) {
@@ -161,7 +147,7 @@ BG96NB1.prototype.getNetworkRegistrationStatus = function (callback) {
 };
 
 BG96NB1.prototype.getModeAndOperator = function (callback) {
-  sendAtCommand('AT+COPS?')
+  this.sendAtCommand('AT+COPS?')
     .then(function resolve(v) {
       callback(v);
     }, function reject(reason) {
@@ -170,7 +156,7 @@ BG96NB1.prototype.getModeAndOperator = function (callback) {
 };
 
 BG96NB1.prototype.getSignalQuality = function (callback) {
-  sendAtCommand('AT+CSQ')
+  this.sendAtCommand('AT+CSQ')
     .then(function resolve(v) {
       callback(v);
     }, function reject(reason) {
@@ -178,14 +164,18 @@ BG96NB1.prototype.getSignalQuality = function (callback) {
     });
 };
 
-BG96NB1.prototype.getVersion = function (callback) {
-  sendAtCommand('')
+BG96NB1.prototype.getPacketDataCounter = function (callback) {
+  this.sendAtCommand('AT+QGDCNT?')
     .then(function resolve(v) {
-      callback(v);
+      var counters = v.substr(8).split(',');
+      var bytesSent = counters[0];
+      var bytesReceived = counters[1];
+      callback(bytesSent, bytesReceived);
     }, function reject(reason) {
       callback(reason);
     });
 };
+
 
 BG96NB1.prototype.openSocket = function (callback) {
 
@@ -210,9 +200,25 @@ BG96NB1.prototype.openSocket = function (callback) {
 
   // +QIURC: "closed",<connectID>
   // <connectID> Integer type. The socket service index. The range is 0-11.
+  at.unregisterLine('+QIURC: "closed"');
   at.registerLine('+QIURC: "closed"', function () {
     BG96NB1Client.emit('end');
   });
+
+  var registerLine = '+QIURC: "recv"';
+  at.unregisterLine(registerLine);
+  at.registerLine(registerLine, function onUrc(line) {
+    line = line.split(",");
+    var bytesToRead = line[2];
+
+    at.getData(line[2], function processData(data) {
+      if (bg96nb1.options.debug) console.log("BG96NB1Client ] " + JSON.stringify(data));
+
+      if (null !== bg96nb1.client) {
+        bg96nb1.client.emit("data", data);
+      }
+    })
+  })
 
   bg96nb1.sendAtCommand('AT&F0')
     .then(function () {
@@ -277,8 +283,12 @@ BG96NB1.prototype.openSocket = function (callback) {
     })
     .then(function () {
       return new Promise(function (resolve) {
-        callback(new BG96NB1Client(bg96nb1));
+        bg96nb1.client = new BG96NB1Client(bg96nb1);
+        callback(bg96nb1.client);
         resolve();
+      },
+      function (err) {
+        return bg96nb1.sendAtCommand('AT+QPOWD');
       })
     })
 };
@@ -296,11 +306,8 @@ BG96NB1.prototype.openSocket = function (callback) {
 //   operator: Network operator (numeric format) (mandatory)
 // }
 //
-// Value "B8" for LTE Band B8 for Deutsche Telekom / 1NCE
-// Value "B20" for LTE Band B20 for Vodafone Deutschland
-//
-// Vodafone IoT APN: "vgesace.nb.iot"    operator: "26202"
-// 1NCE APN' : "iot.1nce.net"            operator: "26201"
+// Vodafone IoT APN: "vgesace.nb.iot" operator: "26202" band: "B20"
+// 1NCE APN' : "iot.1nce.net"         operator: "26201" band: "B8"
 //
 // callback provides "client" function object as argument that can be used
 // to send data and end the connection.
