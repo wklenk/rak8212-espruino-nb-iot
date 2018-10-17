@@ -3,9 +3,8 @@ var bg96nb1;
 var debug = false;
 var flashingLedInterval;
 var flashingLed = false;
+var telemetryCounter = 0;
 var errorStore = [];
-var sensorLoggingInterval;
-
 
 // NB1 connectivity settings for 1NCE
 /*
@@ -60,6 +59,15 @@ function setupExternalHardware(cb) {
 
 mqtt.on('ping_reply', function () {
   if (debug) console.log("MQTT: Ping reply");
+
+  if (telemetryCounter % 10 === 0) {
+    logPacketDataCounters();
+    logTemperature();
+    logPressure();
+    logHumidity();
+  }
+
+  telemetryCounter++;
 });
 
 mqtt.on('error', function (message) {
@@ -72,20 +80,6 @@ mqtt.on('connected', function () {
   if (debug) console.log("MQTT: Client connected.");
 
   //mqtt.subscribe("v1/" + mqtt_options.username + "/things/" + mqtt_options.client_id + "/cmd/04");
-
-  logTemperature();
-  logPressure();
-  logHumidity();
-  logPacketDataCounters();
-
-  // Log sensor values every 5 minutes
-  sensorLoggingInterval = setInterval(function () {
-      logTemperature();
-      logPressure();
-      logHumidity();
-      logPacketDataCounters();
-    },
-    5 * 60 * 1000);
 });
 
 mqtt.on('publish', function (pub) {
@@ -94,8 +88,6 @@ mqtt.on('publish', function (pub) {
 });
 
 mqtt.on('disconnected ', function () {
-  clearInterval(sensorLoggingInterval);
-
   if (debug) console.log('MQTT: Disconnected.');
   errorStore.push('MQTT: Disconnected.');
 });
