@@ -167,7 +167,7 @@ BG96NB1.prototype.getSignalQuality = function (callback) {
 BG96NB1.prototype.getPacketDataCounter = function (callback) {
   this.sendAtCommand('AT+QGDCNT?')
     .then(function resolve(v) {
-      var counters = v.substr(8).split(',');
+      var counters = v.substr(9).split(',');
       var bytesSent = counters[0];
       var bytesReceived = counters[1];
       callback(bytesSent, bytesReceived);
