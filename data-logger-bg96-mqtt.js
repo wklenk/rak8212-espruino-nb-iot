@@ -1,4 +1,10 @@
-/* Example how to send data using the Quectel BG96 modem and built-in MQTT client */
+/* Example how to send data using the Quectel BG96 modem and built-in MQTT client
+*
+*  Note: If you have chosen to upload the code to RAM (default) in the Espruino IDE, you need
+*        to interactively call "onInit();" on the device's JavaScript console after uploading.
+*
+*        Debug output to console can be controlled via variable connection_options.debug
+*/
 
 var at;
 var bme280;
@@ -23,7 +29,7 @@ var connection_options = {
   band: "B20",
   apn: "vgesace.nb.iot",
   operator: "26202",
-  debug: false // Print communication with BG96 module to console.
+  debug: true // Print communication with BG96 module to console.
 };
 
 var mqtt_options = {
@@ -50,47 +56,49 @@ var band_values = {
   "B28": "8000000"
 };
 
-sendAtCommand = function (command, timeoutMs) {
-  return new Promise(function (resolve, reject) {
+sendAtCommand = function (command, timeoutMs, waitForLine) {
+  return new Promise((resolve, reject) => {
 
     var answer = "";
     at.cmd(command + "\r\n", timeoutMs || 1E3, function processResponse(response) {
       if (undefined === response || "ERROR" === response || response.startsWith("+CME ERROR")) {
-        reject(command + ": " + response ? response : "TIMEOUT");
-      } else if ("OK" === response || "SEND OK" === response) {
-        resolve(answer);
+        reject(response ? (command + ": " + response) : (command + ": TIMEOUT"));
+      } else if (waitForLine ? (response.startsWith(waitForLine)) : ("OK" === response)) {
+        resolve(waitForLine ? response : answer);
       } else {
-        return answer += (answer ? "\n" : "") + response, processResponse;
+        answer += (answer ? "\n" : "") + response;
+        return processResponse;
       }
     });
   });
 };
 
-sendAtCommandAndWaitForLine = function (command, timeoutMs, lineBeginningToWaitFor, sendLineAfterPrompt) {
-  return new Promise(function (resolve, reject) {
+sendAtCommandAndWaitForPrompt = function (command, timeoutMs, sendLineAfterPrompt, waitForLine) {
+  return new Promise((resolve, reject) => {
 
+    var prompt = '> ';
     var answer = "";
 
     if (sendLineAfterPrompt) {
-      at.register('> ', function (line) {
-        at.unregister('> ');
+      at.register(prompt, (line) => {
+        at.unregister(prompt);
         at.write(sendLineAfterPrompt + '\x1A');
         return line.substr(2);
       });
     }
 
-    at.unregisterLine(lineBeginningToWaitFor);
-    at.registerLine(lineBeginningToWaitFor, function (line) {
-      resolve(line);
-    });
-
     at.cmd(command + "\r\n", timeoutMs, function processResponse(response) {
       if (undefined === response || "ERROR" === response || response.startsWith("+CME ERROR")) {
-        reject(command + ": " + response ? response : "TIMEOUT");
-      } else if ("OK" === response || "SEND OK" === response) {
-        // Nothing td do.
+        // Unregister the prompt '> ' in case something went wrong.
+        // If we don't, we get follow up errors when it is tried to again register the prompt.
+        at.unregister(prompt);
+
+        reject(response ? (command + ": " + response) : (command + ": TIMEOUT"));
+      } else if (waitForLine ? (response.startsWith(waitForLine)) : ("OK" === response)) {
+        resolve(waitForLine ? response : answer);
       } else {
-        return answer += (answer ? "\n" : "") + response, processResponse;
+        answer += (answer ? "\n" : "") + response;
+        return processResponse;
       }
     });
   });
@@ -117,53 +125,33 @@ function setupExternalHardware(cb) {
 
 function startDataLogger() {
   sendAtCommand('AT&F0')
-    .then(function () {
-      return sendAtCommand('ATE0');
-    })
-    .then(function () {
-      return sendAtCommand('AT+CPIN?'); // Fails on locked PIN
-    })
-    .then(function () {
+    .then(() => sendAtCommand('ATE0'))
+    .then(() => sendAtCommand('AT+CPIN?')) // Fails on locked PIN
+    .then(() => {
       var band_value = band_values[connection_options.band];
       if (undefined === band_value) throw("Unknown band: " + connection_options.band);
 
       return sendAtCommand('AT+QCFG="band",0,0,' + band_value + ',1');
     })
-    .then(function () {
-      return sendAtCommand('AT+QCFG="nwscanmode",3,1'); // Network Search Mode, LTE only
-    })
-    .then(function () {
-      return sendAtCommand('AT+QCFG="nwscanseq",030102,1'); // Network Search Sequence, NB-Iot, GSM, CatM1
-    })
-    .then(function () {
-      return sendAtCommand('AT+QCFG="iotopmode",1,1'); // LTE Search Mode: NB-IoT only
-    })
-    .then(function () {
-      return sendAtCommand('AT+QCFG="servicedomain",1,1'); // Set PS domain, PS only
-    })
-    .then(function () {
-      return sendAtCommand('AT+CGDCONT=1,"IP",' + JSON.stringify(connection_options.apn));
-    })
-    .then(function () {
-      return sendAtCommand('AT+CFUN=1');
-    })
-    .then(function () {
-      // Manually register to network.
-      // Modem LED should flash on-off-off-off periodically to indicate network search
-      return sendAtCommand('AT+COPS=1,2,' + JSON.stringify(connection_options.operator) + ',9', 1800000);
-    })
-    .then(function () {
-      // Open a network for MQTT client
-      return sendAtCommandAndWaitForLine(
+    .then(() => sendAtCommand('AT+QCFG="nwscanmode",3,1')) // Network Search Mode, LTE only
+    .then(() => sendAtCommand('AT+QCFG="nwscanseq",030102,1')) // Network Search Sequence, NB-Iot, GSM, CatM1
+    .then(() => sendAtCommand('AT+QCFG="iotopmode",1,1')) // LTE Search Mode: NB-IoT only
+    .then(() => sendAtCommand('AT+QCFG="servicedomain",1,1')) // Set PS domain, PS only
+    .then(() => sendAtCommand('AT+CGDCONT=1,"IP",' + JSON.stringify(connection_options.apn)))
+    .then(() => sendAtCommand('AT+CFUN=1'))
+    // Manually register to network.
+    // Modem LED should flash on-off-off-off periodically to indicate network search
+    .then(() => sendAtCommand('AT+COPS=1,2,' + JSON.stringify(connection_options.operator) + ',9', 1800000))
+    // Open a network for MQTT client
+    .then(() => sendAtCommand(
         'AT+QMTOPEN=0,' + JSON.stringify(connection_options.server) + ',' + connection_options.port,
         5000,
-        '+QMTOPEN:');
-    })
-    .then(function (line) {
+        '+QMTOPEN:'))
+    .then((line) => {
       if (connection_options.debug) console.log("+QMTOPEN line:", line);
 
       // Connect this client to MQTT server
-      return sendAtCommandAndWaitForLine('AT+QMTCONN=0,'
+      return sendAtCommand('AT+QMTCONN=0,'
         + JSON.stringify(mqtt_options.client_id)
         + ','
         + JSON.stringify(mqtt_options.username)
@@ -172,42 +160,26 @@ function startDataLogger() {
         5000,
         '+QMTCONN:');
     })
-    .then(function (line) {
+    .then((line) => {
       if (connection_options.debug) console.log("+QMTCONN line:", line);
 
       sendTelemetryData();
       telemetryInterval = setInterval(sendTelemetryData, 60000);
     });
-
-    /*
-    .then(function () {
-      return new Promise(function (resolve, reject) {
-        setTimeout(function () {
-            resolve();
-          },
-          60000);
-      });
-    })
-    .then(function () {
-      // Close network for MQTT client
-      return sendAtCommand('AT+QMTCLOSE=0');
-    })
-    .then(function () {
-      // Power down the BG96 module
-      return sendAtCommand('AT+QPOWD');
-    });
-    */
 }
 
 // Publish telemetry data via MQTT
 function sendTelemetryData() {
-  sendAtCommandAndWaitForLine('AT+QMTPUB=0,0,0,0,'
+  var currentTemperature = bme280.getData().temp.toFixed(2);
+  if (connection_options.debug) console.log("Current temperature: ", currentTemperature);
+
+  sendAtCommandAndWaitForPrompt('AT+QMTPUB=0,0,0,0,'
     + JSON.stringify("v1/" + mqtt_options.username + "/things/" + mqtt_options.client_id + "/data/10"),
     5000,
-    '+QMTPUB:',
-    'temp,c=' + bme280.getData().temp.toFixed(2))
-
-    .then(function (line) {
+    'temp,c=' + currentTemperature,
+    '+QMTPUB:'
+    )
+    .then((line) => {
       if (connection_options.debug) console.log("+QMTPUB line:", line);
     });
 }
