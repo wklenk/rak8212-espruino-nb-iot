@@ -1,9 +1,27 @@
-/* Example how to send data using the Quectel BG96 modem and built-in MQTT client
-*
-*  Note: If you have chosen to upload the code to RAM (default) in the Espruino IDE, you need
-*        to interactively call "onInit();" on the device's JavaScript console after uploading.
-*
-*        Debug output to console can be controlled via variable connection_options.debug
+/*
+  Example how to send data using the Quectel BG96 modem and built-in MQTT client
+
+  Note: If you have chosen to upload the code to RAM (default) in the Espruino IDE, you need
+        to interactively call "onInit();" on the device's JavaScript console after uploading.
+
+        Debug output to console can be controlled via variable connection_options.debug
+
+
+  Copyright (C) 2019  Wolfgang Klenk <wolfgang.klenk@gmail.com>
+
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 */
 
 var at;
@@ -162,6 +180,15 @@ function startDataLogger() {
     })
     .then((line) => {
       if (connection_options.debug) console.log("+QMTCONN line:", line);
+
+      var qmtstat = '+QMTSTAT: ';
+      at.unregisterLine(qmtstat);
+      at.registerLine(qmtstat, (line) => {
+        line = line.split(",");
+        var errCode = line[1];
+
+        if (connection_options.debug) console.log("+QMTSTAT reports error code:", errCode);
+      });
 
       sendTelemetryData();
       telemetryInterval = setInterval(sendTelemetryData, 60000);
