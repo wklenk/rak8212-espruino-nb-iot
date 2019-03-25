@@ -31,8 +31,6 @@ var telemetryInterval;
 // NB1 connectivity settings for 1NCE
 /*
 var connection_options = {
-  server: 'mqtt.mydevices.com',
-  port: 1883,
   band: "B8",
   apn: "iot.1nce.net",
   operator: "26201",
@@ -42,8 +40,6 @@ var connection_options = {
 
 // NB1 connectivity settings for Vodafone Germany
 var connection_options = {
-  server: 'mqtt.mydevices.com',
-  port: 1883,
   band: "B20",
   apn: "vgesace.nb.iot",
   operator: "26202",
@@ -51,6 +47,8 @@ var connection_options = {
 };
 
 var mqtt_options = {
+  server: 'mqtt.mydevices.com',
+  port: 1883,
   // Personal credentials from Cayenne myDevices
   client_id: "d38d08e0-c3c1-11e8-bcb6-5d6527e66c38",
   username: "17ab1f60-df5e-11e7-8123-07faebe02555",
@@ -162,7 +160,7 @@ function startDataLogger() {
     .then(() => sendAtCommand('AT+COPS=1,2,' + JSON.stringify(connection_options.operator) + ',9', 1800000))
     // Open a network for MQTT client
     .then(() => sendAtCommand(
-        'AT+QMTOPEN=0,' + JSON.stringify(connection_options.server) + ',' + connection_options.port,
+        'AT+QMTOPEN=0,' + JSON.stringify(mqtt_options.server) + ',' + mqtt_options.port,
         5000,
         '+QMTOPEN:'))
     .then((line) => {
