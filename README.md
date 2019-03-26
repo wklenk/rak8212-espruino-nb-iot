@@ -17,6 +17,22 @@ NB-IoT connections may break from time to time, the MQTT session may get termina
 not handled in the code. So, the code should be more resilient and expect this things to happen and possibly just
 restart or take more intelligent actions.
 
+## upload-ssl-certs-to-bg96.js
+Some IoT Platforms (like AWS IoT) require the MQTT client to authenticate using a SSL client certificate. As the
+Quectel BG96 already **has** an embedded MQTT stack, one must supply the following files to enable authenticated
+and encrypted communication:
+
+* The MQTT client's client certificate (e.g. 3a34634a38-certificate.pem.crt on AWS IoT)
+* The private key of the client (e.g. 3a34634a38-private.pem.key)
+* The trusted root CA certificates
+
+All files have to be provided in PEM format. As this format is in ASCII, you can just cut and paste the contents
+to the JavaScript source code.
+
+Then transfer the code to the device (using the Espruino IDE) and call function _uploadCertificates();_
+The files will be saved to the device as cert.pem, key.pem and cacert.pem and can be used in a later step
+to configure the SSL connection options for the embedded MQTT stack.
+
 ## data-logger-mqtt.js
 This example uses the Espruino MQTT module as implementation for the MQTT protocol. The example provides a
 communication layer between this MQTT implementation and the BG96 which is purely used to send and receive data
