@@ -56,7 +56,7 @@ var connection_options = {
   band: "B8",
   apn: "iot.1nce.net",
   operator: "26201",
-  debug: true
+  debug: false
 };
 */
 
@@ -65,7 +65,7 @@ var connection_options = {
   band: "B20",
   apn: "vgesace.nb.iot",
   operator: "26202",
-  debug: true // Print communication with BG96 module to console.
+  debug: false // Print communication with BG96 module to console.
 };
 
 var mqtt_options = {
@@ -157,7 +157,7 @@ function controlLed(desiredLedState) {
 
 // Setup external hardware.
 function e_SetupExternalHardware() {
-  if (connection_options.debug) console.log(ENTERING_STATE, STATE_SETUP_EXTERNAL_HARDWARE);
+  console.log(ENTERING_STATE, STATE_SETUP_EXTERNAL_HARDWARE);
 
   return new Promise((resolve, reject) => {
     require("iTracker").setCellOn(true, (usart) => {
@@ -165,7 +165,7 @@ function e_SetupExternalHardware() {
     });
   })
     .then((usart) => {
-      if (connection_options.debug) console.log("External modules connected.");
+      console.log("External modules connected.");
       at = require("AT").connect(usart);
 
       if (connection_options.debug) {
@@ -174,7 +174,7 @@ function e_SetupExternalHardware() {
 
       return new Promise((resolve, reject) => {
         bme280 = require("iTracker").setEnvOn(true, () => {
-          if (connection_options.debug) console.log("BME280 wiring set up.");
+          console.log("BME280 wiring set up.");
           resolve();
         });
       });
@@ -190,7 +190,7 @@ function e_SetupExternalHardware() {
 
 // Configure BG96 module and MQTT software stack
 function e_ConfigureModem() {
-  if (connection_options.debug) console.log(ENTERING_STATE, STATE_CONFIGURE_MODEM);
+  console.log(ENTERING_STATE, STATE_CONFIGURE_MODEM);
 
   sendAtCommand('AT&F0')
     .then(() => sendAtCommand('ATE0'))
@@ -236,7 +236,7 @@ function e_ConfigureModem() {
 
 // Register to network
 function e_RegisterToNetwork() {
-  if (connection_options.debug) console.log(ENTERING_STATE, STATE_REGISTER_TO_NETWORK);
+  console.log(ENTERING_STATE, STATE_REGISTER_TO_NETWORK);
   // Manually register to network.
   // Modem LED should flash on-off-off-off periodically to indicate network search
   sendAtCommand('AT+COPS=1,2,' + JSON.stringify(connection_options.operator) + ',9', 1800000)
@@ -251,7 +251,7 @@ function e_RegisterToNetwork() {
 
 // Open a network for MQTT client
 function e_OpenMQTTNetwork() {
-  if (connection_options.debug) console.log(ENTERING_STATE, STATE_OPEN_MQTT_NETWORK);
+  console.log(ENTERING_STATE, STATE_OPEN_MQTT_NETWORK);
 
   sendAtCommand(
     'AT+QMTOPEN=0,' + JSON.stringify(mqtt_options.server) + ',' + mqtt_options.port,
@@ -269,7 +269,7 @@ function e_OpenMQTTNetwork() {
 
 // Connect this client to MQTT server
 function e_ConnectToServer() {
-  if (connection_options.debug) console.log(ENTERING_STATE, STATE_CONNECT_TO_SERVER);
+  console.log(ENTERING_STATE, STATE_CONNECT_TO_SERVER);
 
   sendAtCommand('AT+QMTCONN=0,'
     + JSON.stringify(mqtt_options.client_id),
@@ -284,7 +284,7 @@ function e_ConnectToServer() {
         line = line.split(",");
         var errCode = line[1];
 
-        if (connection_options.debug) console.log("+QMTSTAT reports error code:", errCode);
+        console.log("+QMTSTAT reports error code:", errCode);
       });
 
       sm.signal('ok');
@@ -297,7 +297,7 @@ function e_ConnectToServer() {
 
 // Request the current state from the AWS IoT Device Shadow
 function e_GetCurrentState() {
-  if (connection_options.debug) console.log(ENTERING_STATE, STATE_GET_CURRENT_STATE);
+ console.log(ENTERING_STATE, STATE_GET_CURRENT_STATE);
 
   // Register line +QMTRECV: 0,1,"$aws/things/..."/shadow/get/accepted"
   var qmtrecv = '+QMTRECV: 0,1,' + JSON.stringify("$aws/things/" + mqtt_options.client_id + "/shadow/get/accepted");
@@ -305,7 +305,7 @@ function e_GetCurrentState() {
   at.registerLine(qmtrecv, (line) => {
     var openingBrace = line.indexOf('{');
 
-    if (connection_options.debug) console.log("+QMTRECV reports message on topic:", line.split(",")[2], "with payload: ", line.substr(openingBrace));
+    console.log("+QMTRECV reports message on topic:", line.split(",")[2], "with payload: ", line.substr(openingBrace));
     var payloadJson = JSON.parse(line.substr(openingBrace));
 
     if (payloadJson.hasOwnProperty('state') && payloadJson.state.hasOwnProperty('desired') && payloadJson.state.desired.hasOwnProperty('led')) {
@@ -345,14 +345,14 @@ function e_GetCurrentState() {
 // Subscribe to AWS Device Shadow Delta Updates
 // Will receive a message any time there is a difference between "desired" and "reported" led state.
 function e_SubscribeToDeltaUpdates() {
-  if (connection_options.debug) console.log(ENTERING_STATE, STATE_SUBSCRIBE_TO_DELTA_UPDATES);
+  console.log(ENTERING_STATE, STATE_SUBSCRIBE_TO_DELTA_UPDATES);
 
   // Register line +QMTRECV: 0,1,"$aws/things/..."/shadow/get/accepted"
   var qmtrecv = '+QMTRECV: 0,1,' + JSON.stringify("$aws/things/" + mqtt_options.client_id + "/shadow/update/delta");
   at.unregisterLine(qmtrecv);
   at.registerLine(qmtrecv, (line) => {
     var openingBrace = line.indexOf('{');
-    if (connection_options.debug) console.log("+QMTRECV reports message on topic:", line.split(",")[2], "with payload: ", line.substr(openingBrace));
+    console.log("+QMTRECV reports message on topic:", line.split(",")[2], "with payload: ", line.substr(openingBrace));
 
     var payloadJson = JSON.parse(line.substr(openingBrace));
 
@@ -380,10 +380,10 @@ function e_SubscribeToDeltaUpdates() {
 
 // Publish telemetry data via MQTT
 function e_PublishTelemetryData() {
-  if (connection_options.debug) console.log(ENTERING_STATE, STATE_PUBLISH_TELEMETRY_DATA);
+  console.log(ENTERING_STATE, STATE_PUBLISH_TELEMETRY_DATA);
 
   var currentTemperature = bme280.getData().temp.toFixed(2);
-  if (connection_options.debug) console.log("Current temperature: ", currentTemperature);
+  console.log("Current temperature: ", currentTemperature);
 
   // Reported LED state
   var ledStateString = 'off';
@@ -424,7 +424,7 @@ function e_PublishTelemetryData() {
 }
 
 function e_Sleep(result) {
-  if (connection_options.debug) console.log(ENTERING_STATE, STATE_SLEEP);
+  console.log(ENTERING_STATE, STATE_SLEEP);
 
   return new Promise((resolve, reject) => {
     setTimeout(() => {
@@ -437,7 +437,7 @@ function e_Sleep(result) {
 }
 
 function e_ResetModem(result) {
-  if (connection_options.debug) console.log(ENTERING_STATE, STATE_RESET_MODEM);
+  console.log(ENTERING_STATE, STATE_RESET_MODEM);
 
   sendAtCommand('AT+QPOWD', 10000, 'POWERED DOWN')
     .then(() => {
@@ -448,7 +448,7 @@ function e_ResetModem(result) {
       });
     })
     .then(() => {
-      if (connection_options.debug) console.log('Powered down');
+      console.log('Powered down');
       sm.signal('ok');
     })
     .catch((err) => {
@@ -565,7 +565,7 @@ function onInit() {
   // If the state machine is in state "Power Down", then restart the state machine.
   setTimeout(() => {
     if (sm.state === STATE_POWER_DOWN) {
-      if (connection_options.debug) console.log('Restarting State Machine');
+      console.log('Restarting State Machine');
       sm.init(STATE_SETUP_EXTERNAL_HARDWARE);
     }
   }, 60000);
