@@ -11,16 +11,16 @@ a good starting point.
 The example creates a NB-IoT connection with the radio network, and then creates a MQTT session with the MQTT server.
 It then publishes a temperature value every 60 seconds using MQTT.
 
-###Resilience
+### Resilience
 NB-IoT connections may break from time to time, the MQTT session may get terminated, publishing of messages
 may fail. The code uses a Finite State Machine, and in case of communication issues it shuts down the
 BG96 module and restarts. A "restarts" counter is reported to the AWS device shadow.
 
-###Memory usage
+### Memory usage
 Low memory **is** an issue. It is recommended to switch on the minification feature of the Espruino Web IDE.
 This makes your code smaller before transferring it to the RAK8212.
 
-###Device shadow
+### Device shadow
 The device shadow ("digital twin") representation in AWS IoT currently looks as follows:
 
     {
