@@ -11,11 +11,34 @@ a good starting point.
 The example creates a NB-IoT connection with the radio network, and then creates a MQTT session with the MQTT server.
 It then publishes a temperature value every 60 seconds using MQTT.
 
-**What's missing?**
+###Resilience
+NB-IoT connections may break from time to time, the MQTT session may get terminated, publishing of messages
+may fail. The code uses a Finite State Machine, and in case of communication issues it shuts down the
+BG96 module and restarts. A "restarts" counter is reported to the AWS device shadow.
 
-NB-IoT connections may break from time to time, the MQTT session may get terminated, all this things are currently
-not handled in the code. So, the code should be more resilient and expect this things to happen and possibly just
-restart or take more intelligent actions.
+###Memory usage
+Low memory **is** an issue. It is recommended to switch on the minification feature of the Espruino Web IDE.
+This makes your code smaller before transferring it to the RAK8212.
+
+###Device shadow
+The device shadow ("digital twin") representation in AWS IoT currently looks as follows:
+
+    {
+      "desired": {
+        "led": "off"
+      },
+      "reported": {
+        "temperature": "26.47",
+        "led": "off",
+        "memory": {
+          "free": 763,
+          "usage": 1737,
+          "total": 2500,
+          "history": 389
+        },
+        "restarts": 0
+      }
+    }
 
 ## upload-ssl-certs-to-bg96.js
 Some IoT Platforms (like AWS IoT) require the MQTT client to authenticate using a SSL client certificate. As the
