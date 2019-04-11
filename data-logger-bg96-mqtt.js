@@ -10,6 +10,10 @@
         Cryptographical files for securing the MQTT connection must have been uploaded to the Quectel BG96
         module as files cert.pem, key.pem and cacert.pem before.
 
+        Low memory is an issue!
+        Use the "online minification" feature of the Espruino IDE if you run short on
+        memory (e.g. "Closure (online))
+
 
   Copyright (C) 2019  Wolfgang Klenk <wolfgang.klenk@gmail.com>
 
@@ -45,7 +49,8 @@ var STATE_POWER_DOWN = 'Power Down';
 
 var at;
 var bme280;
-var errCnt = 0; // Counts MQTT publish errors
+var errCnt = 0;
+var smRestartCnt = 0;
 var ledOn = false;
 
 var sm = require("StateMachine").FSM();
@@ -284,7 +289,7 @@ function e_ConnectToServer() {
         line = line.split(",");
         var errCode = line[1];
 
-        console.log("+QMTSTAT reports error code:", errCode);
+        console.log("+QMTSTAT", errCode);
       });
 
       sm.signal('ok');
@@ -305,7 +310,7 @@ function e_GetCurrentState() {
   at.registerLine(qmtrecv, (line) => {
     var openingBrace = line.indexOf('{');
 
-    console.log("+QMTRECV reports message on topic:", line.split(",")[2], "with payload: ", line.substr(openingBrace));
+    console.log("+QMTRECV", line.split(",")[2], line.substr(openingBrace));
     var payloadJson = JSON.parse(line.substr(openingBrace));
 
     if (payloadJson.hasOwnProperty('state') && payloadJson.state.hasOwnProperty('desired') && payloadJson.state.desired.hasOwnProperty('led')) {
@@ -352,7 +357,7 @@ function e_SubscribeToDeltaUpdates() {
   at.unregisterLine(qmtrecv);
   at.registerLine(qmtrecv, (line) => {
     var openingBrace = line.indexOf('{');
-    console.log("+QMTRECV reports message on topic:", line.split(",")[2], "with payload: ", line.substr(openingBrace));
+    console.log("+QMTRECV", line.split(",")[2], line.substr(openingBrace));
 
     var payloadJson = JSON.parse(line.substr(openingBrace));
 
@@ -397,19 +402,20 @@ function e_PublishTelemetryData() {
   sendAtCommandAndWaitForPrompt('AT+QMTPUB=0,1,1,0,'
     + JSON.stringify("$aws/things/" + mqtt_options.client_id + "/shadow/update"),
     5000,
-    '{\n' +
-    '  "state" : {\n' +
-    '    "reported" : {\n' +
-    '      "temperature" : "' + currentTemperature + '",\n' +
-    '      "led" : "' + ledStateString + '",\n' +
-    '      "memory" : {\n' +
-    '        "free" : ' + memory.free + ',\n' +
-    '        "usage" : ' + memory.usage + ',\n' +
-    '        "total" : ' + memory.total + ',\n' +
-    '        "history" : ' + memory.history + '\n' +
-    '      }\n' +
-    '    }\n' +
-    '  }\n' +
+    '{' +
+    '"state" : {' +
+    ' "reported" : {' +
+    '  "temperature" : "' + currentTemperature + '",' +
+    '  "led" : "' + ledStateString + '",' +
+    '  "restarts" : ' + smRestartCnt + ',' +
+    '  "memory" : {' +
+    '   "free" : ' + memory.free + ',' +
+    '   "usage" : ' + memory.usage + ',' +
+    '   "total" : ' + memory.total + ',' +
+    '   "history" : ' + memory.history + '' +
+    '   }' +
+    '  }' +
+    ' }' +
     '}',
     '+QMTPUB:'
   )
@@ -574,6 +580,9 @@ function onInit() {
   setTimeout(() => {
     if (sm.state === STATE_POWER_DOWN) {
       console.log('Restarting State Machine');
+      smRestartCnt++;
+
+      sm.stop
       sm.init(STATE_SETUP_EXTERNAL_HARDWARE);
     }
   }, 60000);
