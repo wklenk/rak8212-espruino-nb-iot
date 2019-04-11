@@ -391,17 +391,25 @@ function e_PublishTelemetryData() {
     ledStateString = 'on';
   }
 
+  var memory = process.memory();
+
   // AWS IoT Protocol
   sendAtCommandAndWaitForPrompt('AT+QMTPUB=0,1,1,0,'
     + JSON.stringify("$aws/things/" + mqtt_options.client_id + "/shadow/update"),
     5000,
     '{\n' +
-    '    "state" : {\n' +
-    '        "reported" : {\n' +
-    '            "temperature" : "' + currentTemperature + '",\n' +
-    '            "led" : "' + ledStateString + '"\n' +
-    '         }\n' +
-    '     }\n' +
+    '  "state" : {\n' +
+    '    "reported" : {\n' +
+    '      "temperature" : "' + currentTemperature + '",\n' +
+    '      "led" : "' + ledStateString + '",\n' +
+    '      "memory" : {\n' +
+    '        "free" : ' + memory.free + ',\n' +
+    '        "usage" : ' + memory.usage + ',\n' +
+    '        "total" : ' + memory.total + ',\n' +
+    '        "history" : ' + memory.history + '\n' +
+    '      }\n' +
+    '    }\n' +
+    '  }\n' +
     '}',
     '+QMTPUB:'
   )
