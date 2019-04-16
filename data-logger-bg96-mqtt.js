@@ -582,7 +582,6 @@ function onInit() {
       console.log('Restarting State Machine');
       smRestartCnt++;
 
-      sm.stop
       sm.init(STATE_SETUP_EXTERNAL_HARDWARE);
     }
   }, 60000);
