@@ -52,6 +52,7 @@ var bme280;
 var errCnt = 0;
 var smRestartCnt = 0;
 var ledOn = false;
+var qmtstat = 0;
 
 var sm = require("StateMachine").FSM();
 
@@ -260,10 +261,20 @@ function e_OpenMQTTNetwork() {
 
   sendAtCommand(
     'AT+QMTOPEN=0,' + JSON.stringify(mqtt_options.server) + ',' + mqtt_options.port,
-    10000,
+    30000,
     '+QMTOPEN:')
     .then((line) => {
       if (connection_options.debug) console.log("+QMTOPEN line:", line);
+
+      var qmtstat = '+QMTSTAT: ';
+      at.unregisterLine(qmtstat);
+      at.registerLine(qmtstat, (line) => {
+        line = line.split(",");
+        qmtstat = parseInt(line[1]);
+
+        console.log("+QMTSTAT Error Code:", qmtstat);
+      });
+
       sm.signal('ok');
     })
     .catch((err) => {
@@ -278,19 +289,10 @@ function e_ConnectToServer() {
 
   sendAtCommand('AT+QMTCONN=0,'
     + JSON.stringify(mqtt_options.client_id),
-    10000,
+    15000,
     '+QMTCONN:')
     .then((line) => {
       if (connection_options.debug) console.log("+QMTCONN line:", line);
-
-      var qmtstat = '+QMTSTAT: ';
-      at.unregisterLine(qmtstat);
-      at.registerLine(qmtstat, (line) => {
-        line = line.split(",");
-        var errCode = line[1];
-
-        console.log("+QMTSTAT", errCode);
-      });
 
       sm.signal('ok');
     })
@@ -494,6 +496,10 @@ function t_RegisterToNetwork(result) {
 }
 
 function t_OpenMQTTNetwork(result) {
+  if (qmtstat > 0) {
+    return {state: STATE_RESET_MODEM};
+  }
+
   switch(result) {
     case('ok'):
       return {state: STATE_CONNECT_TO_SERVER};
@@ -504,6 +510,10 @@ function t_OpenMQTTNetwork(result) {
 }
 
 function t_ConnectToServer(result) {
+  if (qmtstat > 0) {
+    return {state: STATE_RESET_MODEM};
+  }
+
   switch(result) {
     case('ok'):
       return {state: STATE_GET_CURRENT_STATE};
@@ -514,6 +524,10 @@ function t_ConnectToServer(result) {
 }
 
 function t_GetCurrentState(result) {
+  if (qmtstat > 0) {
+    return {state: STATE_RESET_MODEM};
+  }
+
   switch(result) {
     case('ok'):
       return {state: STATE_SUBSCRIBE_TO_DELTA_UPDATES};
@@ -524,6 +538,10 @@ function t_GetCurrentState(result) {
 }
 
 function t_SubscribeToDeltaUpdates(result) {
+  if (qmtstat > 0) {
+    return {state: STATE_RESET_MODEM};
+  }
+
   switch(result) {
     case('ok'):
       return {state: STATE_PUBLISH_TELEMETRY_DATA};
@@ -534,6 +552,10 @@ function t_SubscribeToDeltaUpdates(result) {
 }
 
 function t_PublishTelemetryData(result) {
+  if (qmtstat > 0) {
+    return {state: STATE_RESET_MODEM};
+  }
+
   switch(result) {
     case('ok'):
       errCnt = 0; // Reset error counter
@@ -552,6 +574,10 @@ function t_PublishTelemetryData(result) {
 }
 
 function t_Sleep(result) {
+  if (qmtstat > 0) {
+    return {state: STATE_RESET_MODEM};
+  }
+
   return {state: STATE_PUBLISH_TELEMETRY_DATA};
 }
 
@@ -584,5 +610,5 @@ function onInit() {
 
       sm.init(STATE_SETUP_EXTERNAL_HARDWARE);
     }
-  }, 60000);
+  }, 120000);
 }
