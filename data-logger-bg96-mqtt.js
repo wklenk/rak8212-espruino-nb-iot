@@ -50,6 +50,7 @@ var STATE_POWER_DOWN = 'Power Down';
 var at;
 var bme280;
 var errCnt = 0;
+var updateCnt = 1;
 var smRestartCnt = 0;
 var ledOn = false;
 var qmtstat = 0;
@@ -410,6 +411,7 @@ function e_PublishTelemetryData() {
     '  "temperature" : "' + currentTemperature + '",' +
     '  "led" : "' + ledStateString + '",' +
     '  "restarts" : ' + smRestartCnt + ',' +
+    '  "updates" : ' + updateCnt + ',' +
     '  "memory" : {' +
     '   "free" : ' + memory.free + ',' +
     '   "usage" : ' + memory.usage + ',' +
@@ -559,11 +561,12 @@ function t_PublishTelemetryData(result) {
   switch(result) {
     case('ok'):
       errCnt = 0; // Reset error counter
+      updateCnt++;
       return {state: STATE_SLEEP};
 
     default:
       errCnt++;
-      if (errCnt >= 1) {
+      if (errCnt >= 3) {
         errCnt = 0;
         return {state: STATE_RESET_MODEM};
       }
@@ -603,7 +606,8 @@ function onInit() {
   sm.init(STATE_SETUP_EXTERNAL_HARDWARE);
 
   // If the state machine is in state "Power Down", then restart the state machine.
-  setTimeout(() => {
+  setInterval(() => {
+    console.log("Checking state machine state");
     if (sm.state === STATE_POWER_DOWN) {
       console.log('Restarting State Machine');
       smRestartCnt++;
