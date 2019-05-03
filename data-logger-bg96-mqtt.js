@@ -14,6 +14,8 @@
         Use the "online minification" feature of the Espruino IDE if you run short on
         memory (e.g. "Closure (online))
 
+        Although not completely reproduced: For standalone operation, please turn off debug output to console,
+        (debug: false) as this might lead to the system freezing up.
 
   Copyright (C) 2019  Wolfgang Klenk <wolfgang.klenk@gmail.com>
 
@@ -447,7 +449,7 @@ function e_Sleep(result) {
   return new Promise((resolve, reject) => {
     setTimeout(() => {
       resolve();
-    }, 60000);
+    }, 300000);
   })
     .then(() => {
       sm.signal('ok');
@@ -614,5 +616,5 @@ function onInit() {
 
       sm.init(STATE_SETUP_EXTERNAL_HARDWARE);
     }
-  }, 120000);
+  }, 600000);
 }
